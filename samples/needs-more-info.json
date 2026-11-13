@@ -1,0 +1,1 @@
+{"code":"","description":"Users report that withdraw sometimes fails. Not sure why. Might be related to gas.","expected":{"note":"Too thin to judge: no steps, no code, no contract, no impact. The mock stub should return needs-more-info.","severity":"informational","verdict":"needs-more-info"},"title":"Withdraw sometimes fails"}
