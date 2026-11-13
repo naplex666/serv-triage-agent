@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SERV Triage Agent — demo MOCK</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; max-width: 860px;
+         margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; line-height: 1.5; }
+  h1 { font-size: 1.5rem; margin-bottom: .2rem; }
+  .sub { color: #555; margin-top: 0; }
+  label { display: block; font-weight: 600; margin: 1rem 0 .3rem; }
+  input[type=text], textarea { width: 100%; box-sizing: border-box; padding: .6rem;
+    border: 1px solid #bbb; border-radius: 6px; font: inherit; }
+  textarea { min-height: 110px; font-family: ui-monospace, monospace; font-size: .9rem; }
+  button { margin-top: 1rem; padding: .6rem 1.2rem; font: inherit; font-weight: 600;
+    border: 0; border-radius: 6px; background: #111; color: #fff; cursor: pointer; }
+  button.secondary { background: #eee; color: #111; margin-left: .5rem; }
+  #result { display: none; margin-top: 2rem; border: 1px solid #ddd; border-radius: 8px; padding: 1rem 1.2rem; }
+  .badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px;
+    font-size: .85rem; font-weight: 700; color: #fff; }
+  .badge.mock { background: #b45309; }
+  .v-valid { background: #15803d; } .v-likely-valid { background: #65a30d; }
+  .v-needs-more-info { background: #b45309; } .v-invalid { background: #b91c1c; }
+  .sev-critical { background: #7f1d1d; } .sev-high { background: #b91c1c; }
+  .sev-medium { background: #b45309; } .sev-low { background: #0369a1; }
+  .sev-informational { background: #64748b; }
+  .confbar { height: 10px; background: #eee; border-radius: 5px; overflow: hidden; }
+  .confbar > div { height: 100%; background: #111; }
+  pre.trace { background: #f6f6f6; padding: .8rem; border-radius: 6px;
+    white-space: pre-wrap; font-size: .88rem; }
+  .samples { margin-top: .5rem; font-size: .9rem; color: #555; }
+  .samples button { padding: .3rem .7rem; margin: .2rem .2rem 0 0; font-size: .85rem; }
+  .foot { margin-top: 2rem; font-size: .9rem; color: #555; }
+</style>
+</head>
+<body>
+<h1>SERV Triage Agent — demo MOCK</h1>
+<p class="sub">Paste a raw bug-bounty finding. The 7-question triage gate runs locally
+in your browser and returns a structured verdict with an auditable reasoning
+trail. <b>This page is MOCK only</b> — a deterministic stub, the same pipeline
+as the Python app, no API key, no network calls, no cost.</p>
+
+<form id="form">
+  <label for="title">Title</label>
+  <input type="text" id="title" placeholder="e.g. WalletConnect session processes out-of-scope chains">
+  <label for="description">Description (steps, impact, what the attacker does)</label>
+  <textarea id="description" placeholder="Step 1… Step 2… Impact: …"></textarea>
+  <label for="code">Code (optional)</label>
+  <textarea id="code" placeholder="paste the vulnerable snippet"></textarea>
+  <button type="submit" id="go">Triage finding</button>
+  <button type="button" class="secondary" id="clear">Clear</button>
+</form>
+
+<p class="samples">Try a bundled sample:
+  <span id="sampleButtons"></span></p>
+
+<div id="result"></div>
+
+<p class="foot">Full project (CLI + live SERV Reasoning mode):
+<a href="https://github.com/naplex666/serv-triage-agent">github.com/naplex666/serv-triage-agent</a>
+· Built for the SERV Hackathon Edition 02, Open Track.</p>
+
+<script>
+"use strict";
+/* MOCK-START — deterministic stub, faithful port of serv_triage/serv_client.py::_mock_verdict.
+   Same phrase lists, same order, same confidence math, same trace strings. */
+const KILL_PHRASES = ["admin can", "only owner", "onlyowner", "owner can", "owner-only",
+  "gas optimization", "gas optimisation", "missing event", "naming", "theoretical",
+  "centralization risk", "centralisation risk", "set the fee", "set fee",
+  "documentation", "typo"];
+const CRITICAL_WORDS = ["drain", "steal", "unlimited mint", "infinite mint",
+  "mint unlimited", "take over", "takeover", "all funds"];
+const HIGH_WORDS = ["bypass", "unauthorised", "unauthorized", "reentrancy", "reentrant",
+  "signature replay", "without permission", "privilege escalation", "front-run", "frontrun"];
+const MEDIUM_WORDS = ["freeze", "frozen", "denial of service", "dos", "griefing",
+  "lock funds", "lock user"];
+const STEP_WORDS = ["step", "reproduce", "poc", "proof of concept", "attacker",
+  "call ", "1.", "first,", "then "];
+const IMPACT_WORDS = ["fund", "loss", "steal", "drain", "bypass", "freeze",
+  "unauthorised", "unauthorized", "exploit"];
+
+function countHits(text, words) { return words.filter(w => text.includes(w)); }
+
+function mockVerdict(finding) {
+  const title = (finding.title || "").trim();
+  const description = (finding.description || "").trim();
+  const code = (finding.code || "").trim();
+  const blob = (title + "\n" + description + "\n" + code).toLowerCase();
+
+  const kills = countHits(blob, KILL_PHRASES);
+  const crit = countHits(blob, CRITICAL_WORDS);
+  const high = countHits(blob, HIGH_WORDS);
+  const med = countHits(blob, MEDIUM_WORDS);
+  const steps = countHits(blob, STEP_WORDS);
+  const impact = countHits(blob, IMPACT_WORDS);
+  const hasSteps = /\b(step|1\.)\b/.test(blob) || blob.includes("poc");
+  const hasCode = code.length > 0;
+  const isThin = description.length < 150 && !hasCode && !hasSteps;
+
+  if (kills.length) {
+    const trace = [
+      "Q1 exploit path: UNCLEAR — submission leans on a privileged or theoretical action.",
+      "Q2 impact list: not reached — gate already failed below.",
+      "Q3 in scope: assumed in scope, not the deciding factor.",
+      "Q4 privilege: FAIL — requires admin/owner-only access an attacker cannot get.",
+      "Q5 known behaviour: not checked — gate already failed.",
+      "Q6 impact proof: FAIL — no quantified loss shown, only a theoretical risk.",
+      "Q7 known-invalid class: FAIL — matches a known-invalid class (admin power / gas / naming / missing event)."
+    ].join("\n");
+    return {
+      verdict: "invalid",
+      severity: "informational",
+      confidence: Math.min(95, 80 + 5 * kills.length),
+      summary: "Invalid: the finding relies on privileged (admin/owner-only) action or a known-invalid class with no attacker path.",
+      evidence: kills.slice(0, 4).map(k => "matched kill signal: '" + k + "'"),
+      questions_failed: ["Q4", "Q6", "Q7"],
+      reasoning_trace: trace,
+      recommended_next_step: "Close as invalid, citing the failed gate questions (Q4/Q7). Do not file."
+    };
+  }
+  if (isThin) {
+    const trace = [
+      "Q1 exploit path: FAIL — no concrete steps, calls, or order given.",
+      "Q2 impact list: cannot tell — no impact described.",
+      "Q3 in scope: cannot tell — no contract or component named.",
+      "Q4 privilege: cannot tell — no attacker model given.",
+      "Q5 known behaviour: cannot tell — too little detail to search.",
+      "Q6 impact proof: FAIL — no proof, no numbers, no code.",
+      "Q7 known-invalid class: cannot tell — too little detail."
+    ].join("\n");
+    return {
+      verdict: "needs-more-info",
+      severity: "informational",
+      confidence: 45,
+      summary: "Too thin to judge: no reproduction steps, no code, and no stated impact. Ask the reporter for the missing pieces.",
+      evidence: ["description is under 150 characters", "no code attached", "no reproduction steps"],
+      questions_failed: ["Q1", "Q6"],
+      reasoning_trace: trace,
+      recommended_next_step: "Ask the reporter for exact steps, the vulnerable code, and the concrete impact before any further triage."
+    };
+  }
+
+  let confidence = 55;
+  if (hasSteps) confidence += 15;
+  if (hasCode) confidence += 10;
+  if (impact.length) confidence += 10;
+  if (crit.length || high.length) confidence += 5;
+  confidence = Math.max(5, Math.min(98, confidence));
+
+  const severity = crit.length ? "critical" : high.length ? "high" : med.length ? "medium" : "low";
+
+  const evidence = [];
+  if (hasSteps) evidence.push("concrete reproduction steps given");
+  if (hasCode) evidence.push("vulnerable code attached");
+  impact.slice(0, 3).forEach(w => evidence.push("impact signal: '" + w + "'"));
+  if (!evidence.length) evidence.push("description states a concrete behaviour");
+
+  const trace = [
+    "Q1 exploit path: PASS — concrete steps with calls and order are given.",
+    "Q2 impact list: PASS — impact maps to an accepted impact class.",
+    "Q3 in scope: PASS — root cause named in the submitted component.",
+    "Q4 privilege: PASS — attacker needs no privileged access.",
+    "Q5 known behaviour: PASS — no known/accepted duplicate identified in the submission.",
+    "Q6 impact proof: PASS — impact is concrete and quantified in the steps.",
+    "Q7 known-invalid class: PASS — not a gas / naming / event / admin-only class."
+  ].join("\n");
+  const verdict = confidence >= 80 ? "valid" : "likely-valid";
+  const titleCased = verdict.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  return {
+    verdict: verdict,
+    severity: severity,
+    confidence: confidence,
+    summary: titleCased + ": the submission shows a concrete attack path with " + severity + " impact.",
+    evidence: evidence,
+    questions_failed: [],
+    reasoning_trace: trace,
+    recommended_next_step: verdict === "valid"
+      ? "Draft the report with a runnable proof of concept and file after human review."
+      : "Reproduce the proof of concept on a fork and confirm the impact numbers before drafting."
+  };
+}
+/* MOCK-END */
+
+const SAMPLES = [
+  {
+    name: "valid-walletconnect-chain-scope",
+    title: "WalletConnect session processes signing requests on chains outside the session scope",
+    description: "A wallet's WalletConnect session is scoped to one chain (for example Ethereum mainnet, chain 1), but signing requests that name a different chain are still shown to the user and signed instead of being rejected.\n\nStep 1. A dApp opens a WalletConnect session scoped to chain 1 (Ethereum mainnet).\nStep 2. The same dApp sends a signing request (personal_sign / eth_signTransaction) that names chain 137 (Polygon).\nStep 3. The wallet displays the request and, when the user approves, signs it. It does not reject the out-of-scope chain, and it silently switches the network context for the request.\n\nImpact: a user who believes they are signing on mainnet can be tricked into signing on another chain where the same address holds funds or where a malicious contract is waiting. The wallet is the last line of defence for chain scope, and it does not enforce it. Reproduced 19 out of 19 attempts in a local test harness against the session handler.",
+    code: "// session approval handler (anonymised)\nfunction onSessionRequest(request) {\n  const session = getSession(request.topic);\n  if (!session) throw new Error('unknown session');\n  const tx = request.params[0];\n  // NOTE: request chain id is never compared against\n  // session.namespaces — any chain is accepted here.\n  return signer.sign(tx);\n}"
+  },
+  {
+    name: "invalid-false-positive",
+    title: "Contract owner can set the swap fee to 100%",
+    description: "The contract owner can call setFee(10000) and set the fee to 100%. This is a centralization risk because the owner could take all of the users' funds through fees. No attacker path without the owner key is shown.",
+    code: "function setFee(uint256 _fee) external onlyOwner {\n  fee = _fee;\n}"
+  },
+  {
+    name: "needs-more-info",
+    title: "Withdraw sometimes fails",
+    description: "Users report that withdraw sometimes fails. Not sure why. Might be related to gas.",
+    code: ""
+  }
+];
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+SAMPLES.forEach(s => {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = s.name; b.className = "secondary";
+  b.onclick = () => {
+    $("title").value = s.title;
+    $("description").value = s.description;
+    $("code").value = s.code;
+  };
+  $("sampleButtons").appendChild(b);
+});
+
+$("form").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const finding = { title: $("title").value, description: $("description").value, code: $("code").value };
+  const box = $("result");
+  box.style.display = "block";
+  if (!finding.title.trim() && !finding.description.trim()) {
+    box.innerHTML = "<p style='color:#b91c1c;font-weight:600'>Finding needs at least a title or a description.</p>";
+    return;
+  }
+  const r = mockVerdict(finding);
+  box.innerHTML =
+    "<p><span class='badge mock'>MOCK MODE</span> " +
+    "<span class='badge v-" + esc(r.verdict) + "'>" + esc(r.verdict.toUpperCase()) + "</span> " +
+    "<span class='badge sev-" + esc(r.severity) + "'>" + esc(r.severity.toUpperCase()) + "</span> " +
+    "<span>model: mock-stub-v1</span></p>" +
+    "<p><b>Confidence: " + esc(r.confidence) + "/100</b></p>" +
+    "<div class='confbar'><div style='width:" + esc(r.confidence) + "%'></div></div>" +
+    "<p>" + esc(r.summary) + "</p>" +
+    "<h3>Evidence</h3><ul>" +
+    (r.evidence || []).map(e => "<li>" + esc(e) + "</li>").join("") + "</ul>" +
+    "<h3>Gate questions failed</h3><p>" +
+    ((r.questions_failed || []).length ? esc(r.questions_failed.join(", ")) : "none — all seven passed") + "</p>" +
+    "<h3>Reasoning trace (auditable)</h3><pre class='trace'>" + esc(r.reasoning_trace) + "</pre>" +
+    "<h3>Recommended next step</h3><p>" + esc(r.recommended_next_step) + "</p>";
+});
+
+$("clear").onclick = () => {
+  $("title").value = ""; $("description").value = ""; $("code").value = "";
+  $("result").style.display = "none";
+};
+</script>
+</body>
+</html>
